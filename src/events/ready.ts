@@ -3,7 +3,7 @@ import { Client } from 'discord.js';
 import { logger } from '../utils/logger';
 
 export const ready: Event = {
-  name: 'ready',
+  name: 'clientReady',
   once: true,
   async execute(client: Client) {
     if (!client.user) return;

@@ -1,0 +1,93 @@
+name: Discloud Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version tag (e.g., v1.0.0)"
+        required: true
+        type: string
+
+jobs:
+  build-and-package:
+    name: Build and Package for Discloud
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "yarn"
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Build project
+        run: yarn build
+
+      - name: Get version
+        id: get_version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          fi
+          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Version: ${VERSION}"
+
+      - name: Update discloud.config version
+        run: |
+          VERSION="${{ steps.get_version.outputs.VERSION }}"
+          sed -i "s/VERSION=.*/VERSION=${VERSION}/" discloud.config
+
+      - name: Create deployment package
+        run: |
+          mkdir -p discloud-package
+          cp -r dist discloud-package/
+          cp package.json yarn.lock discloud.config discloud-package/
+          cd discloud-package
+          zip -r ../discloud-package.zip .
+          cd ..
+          ls -lh discloud-package.zip
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            discloud-package.zip
+          tag_name: v${{ steps.get_version.outputs.VERSION }}
+          name: Release v${{ steps.get_version.outputs.VERSION }}
+          body: |
+            ## Discloud Deployment Package
+            
+            Version: **v${{ steps.get_version.outputs.VERSION }}**
+            
+            ### Package Contents
+            - `dist/` - Compiled JavaScript files
+            - `package.json` - Dependencies
+            - `yarn.lock` - Lock file
+            - `discloud.config` - Discloud configuration
+            
+            ### Deployment Instructions
+            1. Download `discloud-package.zip` from the assets below
+            2. Extract the ZIP file
+            3. Add your `.env` file with environment variables
+            4. Re-zip the contents (including `.env`)
+            5. Upload to Discloud dashboard
+            
+            ### Environment Variables Required
+            - `DISCORD_TOKEN`
+            - `DISCORD_CLIENT_ID`
+            - `SUPABASE_URL`
+            - `SUPABASE_ANON_KEY`
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
