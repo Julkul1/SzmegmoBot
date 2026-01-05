@@ -40,6 +40,8 @@ jobs:
             - name: Get version
               id: get_version
               run: |
+                  echo "Event name: ${{ github.event_name }}"
+                  echo "Ref: ${{ github.ref }}"
                   if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
                     VERSION="${{ github.event.inputs.version }}"
                     IS_TAG="false"
@@ -133,7 +135,7 @@ jobs:
                   name: ${{ steps.release_meta.outputs.RELEASE_NAME }}
                   draft: ${{ steps.release_meta.outputs.DRAFT }}
                   prerelease: ${{ steps.release_meta.outputs.PRERELEASE }}
-                  make_latest: false
+                  target_commitish: ${{ github.sha }}
                   generate_release_notes: false
                   body: |
                       ## Discloud Deployment Package
