@@ -13,7 +13,7 @@ Modern Discord bot built with TypeScript, featuring Supabase integration and opt
 
 ## Prerequisites
 
-- Node.js 18 or higher
+- Node.js 20 or higher
 - Discord Bot Token
 - Supabase Project (URL and Anon Key)
 - Discloud account (for deployment)
