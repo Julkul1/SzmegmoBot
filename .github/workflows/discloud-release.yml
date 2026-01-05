@@ -74,26 +74,64 @@ jobs:
               id: release_meta
               run: |
                   if [ "${{ steps.get_version.outputs.IS_TAG }}" == "true" ]; then
-                    echo "TAG_NAME=v${{ steps.get_version.outputs.VERSION }}" >> $GITHUB_OUTPUT
                     echo "RELEASE_NAME=Release v${{ steps.get_version.outputs.VERSION }}" >> $GITHUB_OUTPUT
                     echo "DRAFT=false" >> $GITHUB_OUTPUT
                     echo "PRERELEASE=false" >> $GITHUB_OUTPUT
                   else
-                    echo "TAG_NAME=discloud-${{ steps.get_version.outputs.VERSION }}" >> $GITHUB_OUTPUT
                     echo "RELEASE_NAME=Discloud Package - ${{ steps.get_version.outputs.VERSION }}" >> $GITHUB_OUTPUT
                     echo "DRAFT=true" >> $GITHUB_OUTPUT
                     echo "PRERELEASE=true" >> $GITHUB_OUTPUT
                   fi
 
-            - name: Create Release
+            - name: Create Release (with tag)
+              if: steps.get_version.outputs.IS_TAG == 'true'
               uses: softprops/action-gh-release@v1
               with:
                   files: |
                       discloud-package.zip
-                  tag_name: ${{ steps.release_meta.outputs.TAG_NAME }}
+                  tag_name: v${{ steps.get_version.outputs.VERSION }}
                   name: ${{ steps.release_meta.outputs.RELEASE_NAME }}
                   draft: ${{ steps.release_meta.outputs.DRAFT }}
                   prerelease: ${{ steps.release_meta.outputs.PRERELEASE }}
+                  generate_release_notes: false
+                  body: |
+                      ## Discloud Deployment Package
+
+                      Version: **${{ steps.get_version.outputs.VERSION }}**
+                      Commit: `${{ github.sha }}`
+
+                      ### Package Contents
+                      - `dist/` - Compiled JavaScript files
+                      - `package.json` - Dependencies
+                      - `yarn.lock` - Lock file
+                      - `discloud.config` - Discloud configuration
+
+                      ### Deployment Instructions
+                      1. Download `discloud-package.zip` from the assets below
+                      2. Extract the ZIP file
+                      3. Add your `.env` file with environment variables
+                      4. Re-zip the contents (including `.env`)
+                      5. Upload to Discloud dashboard
+
+                      ### Environment Variables Required
+                      - `DISCORD_TOKEN`
+                      - `DISCORD_CLIENT_ID`
+                      - `SUPABASE_URL`
+                      - `SUPABASE_ANON_KEY`
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Create Release (without tag)
+              if: steps.get_version.outputs.IS_TAG == 'false'
+              uses: softprops/action-gh-release@v1
+              with:
+                  files: |
+                      discloud-package.zip
+                  name: ${{ steps.release_meta.outputs.RELEASE_NAME }}
+                  draft: ${{ steps.release_meta.outputs.DRAFT }}
+                  prerelease: ${{ steps.release_meta.outputs.PRERELEASE }}
+                  target_commitish: ${{ github.sha }}
+                  generate_release_notes: false
                   body: |
                       ## Discloud Deployment Package
 
