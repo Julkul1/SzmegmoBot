@@ -1,93 +1,123 @@
 name: Discloud Release
 
 on:
-  push:
-    tags:
-      - "v*"
-  workflow_dispatch:
-    inputs:
-      version:
-        description: "Version tag (e.g., v1.0.0)"
-        required: true
-        type: string
+    push:
+        branches:
+            - main
+            - master
+        tags:
+            - "v*"
+    workflow_dispatch:
+        inputs:
+            version:
+                description: "Version tag (e.g., v1.0.0)"
+                required: true
+                type: string
 
 jobs:
-  build-and-package:
-    name: Build and Package for Discloud
-    runs-on: ubuntu-latest
+    build-and-package:
+        name: Build and Package for Discloud
+        runs-on: ubuntu-latest
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: "yarn"
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "20"
+                  cache: "yarn"
 
-      - name: Install dependencies
-        run: yarn install --frozen-lockfile
+            - name: Install dependencies
+              run: yarn install --frozen-lockfile
 
-      - name: Build project
-        run: yarn build
+            - name: Build project
+              run: yarn build
 
-      - name: Get version
-        id: get_version
-        run: |
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            VERSION="${{ github.event.inputs.version }}"
-          else
-            VERSION="${GITHUB_REF#refs/tags/v}"
-          fi
-          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
-          echo "Version: ${VERSION}"
+            - name: Get version
+              id: get_version
+              run: |
+                  if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+                    VERSION="${{ github.event.inputs.version }}"
+                    IS_TAG="false"
+                  elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+                    VERSION="${GITHUB_REF#refs/tags/v}"
+                    IS_TAG="true"
+                  else
+                    VERSION=$(node -p "require('./package.json').version")
+                    SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+                    VERSION="${VERSION}-${SHORT_SHA}"
+                    IS_TAG="false"
+                  fi
+                  echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+                  echo "IS_TAG=${IS_TAG}" >> $GITHUB_OUTPUT
+                  echo "Version: ${VERSION}"
+                  echo "Is Tag: ${IS_TAG}"
 
-      - name: Update discloud.config version
-        run: |
-          VERSION="${{ steps.get_version.outputs.VERSION }}"
-          sed -i "s/VERSION=.*/VERSION=${VERSION}/" discloud.config
+            - name: Update discloud.config version
+              run: |
+                  VERSION="${{ steps.get_version.outputs.VERSION }}"
+                  sed -i "s/VERSION=.*/VERSION=${VERSION}/" discloud.config
 
-      - name: Create deployment package
-        run: |
-          mkdir -p discloud-package
-          cp -r dist discloud-package/
-          cp package.json yarn.lock discloud.config discloud-package/
-          cd discloud-package
-          zip -r ../discloud-package.zip .
-          cd ..
-          ls -lh discloud-package.zip
+            - name: Create deployment package
+              run: |
+                  mkdir -p discloud-package
+                  cp -r dist discloud-package/
+                  cp package.json yarn.lock discloud.config discloud-package/
+                  cd discloud-package
+                  zip -r ../discloud-package.zip .
+                  cd ..
+                  ls -lh discloud-package.zip
 
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
-        with:
-          files: |
-            discloud-package.zip
-          tag_name: v${{ steps.get_version.outputs.VERSION }}
-          name: Release v${{ steps.get_version.outputs.VERSION }}
-          body: |
-            ## Discloud Deployment Package
-            
-            Version: **v${{ steps.get_version.outputs.VERSION }}**
-            
-            ### Package Contents
-            - `dist/` - Compiled JavaScript files
-            - `package.json` - Dependencies
-            - `yarn.lock` - Lock file
-            - `discloud.config` - Discloud configuration
-            
-            ### Deployment Instructions
-            1. Download `discloud-package.zip` from the assets below
-            2. Extract the ZIP file
-            3. Add your `.env` file with environment variables
-            4. Re-zip the contents (including `.env`)
-            5. Upload to Discloud dashboard
-            
-            ### Environment Variables Required
-            - `DISCORD_TOKEN`
-            - `DISCORD_CLIENT_ID`
-            - `SUPABASE_URL`
-            - `SUPABASE_ANON_KEY`
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            - name: Set release metadata
+              id: release_meta
+              run: |
+                  if [ "${{ steps.get_version.outputs.IS_TAG }}" == "true" ]; then
+                    echo "TAG_NAME=v${{ steps.get_version.outputs.VERSION }}" >> $GITHUB_OUTPUT
+                    echo "RELEASE_NAME=Release v${{ steps.get_version.outputs.VERSION }}" >> $GITHUB_OUTPUT
+                    echo "DRAFT=false" >> $GITHUB_OUTPUT
+                    echo "PRERELEASE=false" >> $GITHUB_OUTPUT
+                  else
+                    echo "TAG_NAME=discloud-${{ steps.get_version.outputs.VERSION }}" >> $GITHUB_OUTPUT
+                    echo "RELEASE_NAME=Discloud Package - ${{ steps.get_version.outputs.VERSION }}" >> $GITHUB_OUTPUT
+                    echo "DRAFT=true" >> $GITHUB_OUTPUT
+                    echo "PRERELEASE=true" >> $GITHUB_OUTPUT
+                  fi
 
+            - name: Create Release
+              uses: softprops/action-gh-release@v1
+              with:
+                  files: |
+                      discloud-package.zip
+                  tag_name: ${{ steps.release_meta.outputs.TAG_NAME }}
+                  name: ${{ steps.release_meta.outputs.RELEASE_NAME }}
+                  draft: ${{ steps.release_meta.outputs.DRAFT }}
+                  prerelease: ${{ steps.release_meta.outputs.PRERELEASE }}
+                  body: |
+                      ## Discloud Deployment Package
+
+                      Version: **${{ steps.get_version.outputs.VERSION }}**
+                      Commit: `${{ github.sha }}`
+                      Branch: `${{ github.ref_name }}`
+
+                      ### Package Contents
+                      - `dist/` - Compiled JavaScript files
+                      - `package.json` - Dependencies
+                      - `yarn.lock` - Lock file
+                      - `discloud.config` - Discloud configuration
+
+                      ### Deployment Instructions
+                      1. Download `discloud-package.zip` from the assets below
+                      2. Extract the ZIP file
+                      3. Add your `.env` file with environment variables
+                      4. Re-zip the contents (including `.env`)
+                      5. Upload to Discloud dashboard
+
+                      ### Environment Variables Required
+                      - `DISCORD_TOKEN`
+                      - `DISCORD_CLIENT_ID`
+                      - `SUPABASE_URL`
+                      - `SUPABASE_ANON_KEY`
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
