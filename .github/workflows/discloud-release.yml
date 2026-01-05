@@ -18,6 +18,8 @@ jobs:
     build-and-package:
         name: Build and Package for Discloud
         runs-on: ubuntu-latest
+        permissions:
+            contents: write
 
         steps:
             - name: Checkout code
@@ -127,10 +129,11 @@ jobs:
               with:
                   files: |
                       discloud-package.zip
+                  tag_name: discloud-${{ github.sha }}
                   name: ${{ steps.release_meta.outputs.RELEASE_NAME }}
                   draft: ${{ steps.release_meta.outputs.DRAFT }}
                   prerelease: ${{ steps.release_meta.outputs.PRERELEASE }}
-                  target_commitish: ${{ github.sha }}
+                  make_latest: false
                   generate_release_notes: false
                   body: |
                       ## Discloud Deployment Package
